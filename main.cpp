@@ -10,57 +10,64 @@
 //  Copyright © 2019 Steven. All rights reserved.
 //
 
-#include <iostream>
+#include <fstream>
 #include <string>
 #include "Stack.hpp"
 #include "Queue.hpp"
+#include "List.hpp"
+
 using namespace std;
+ifstream InputFile;
+ofstream OutputFile;
+
 
 class Cleaning_Robot;
-// 此 Class 用來讀入 Input 的資訊以及將 Map 轉換成 Adjacency Matrix
-class Matrix_To_Adjacency_Matrix{
+// 此 Class 用來讀入 Input 的資訊以及將 Map 轉換成 Adjacency List
+class Matrix_To_Adjacency_List{
 private:
     int Rows_Num, Columns_Num;
     char *Input_Matrix;
-    int **Adjacency_Matrix;
     int Charging_Location_Index;
     int Battery_Life;
+    LinkedList *AdjLists;
+
 public:
     friend class Cleaning_Robot;
     // Constructor
-    Matrix_To_Adjacency_Matrix():
+    Matrix_To_Adjacency_List():
     Rows_Num(0),Columns_Num(0),Battery_Life(0),
-    Input_Matrix(nullptr),Adjacency_Matrix(nullptr),
+    Input_Matrix(nullptr),
     Charging_Location_Index(0){};
     
-    Matrix_To_Adjacency_Matrix(int Rows,int Columns,char *Map_Matrix,int Battery):
-    Rows_Num(Rows),Columns_Num(Columns),Battery_Life(Battery),
-    Input_Matrix(Map_Matrix),
+    Matrix_To_Adjacency_List(int Rows,int Columns,char *Map_Matrix,int Battery):
+    Rows_Num(Rows),Columns_Num(Columns),Battery_Life(Battery),Input_Matrix(Map_Matrix),
     Charging_Location_Index(0){
-        Adjacency_Matrix = new int *[Rows*Columns];
-        for (int i = 0; i<Rows*Columns; i++){
-            Adjacency_Matrix[i]=new int [Rows*Columns]{0};
-        }
+        AdjLists = new LinkedList[Rows*Columns];
         Matrix_Transfer();
     };
+    
     void Matrix_Transfer();
     void Print_Adjacency_Matrix();
+    void addEdge(int src, int dest){
+         AdjLists[src].Push_back(dest);
+    }
+
 };
 // 將每個 Vertex 向下、向右連 Edge，就可以求出所有 Edge
-void Matrix_To_Adjacency_Matrix::Matrix_Transfer(){
+void Matrix_To_Adjacency_List::Matrix_Transfer(){
     for(int i=0; i<Rows_Num-1; i++){
         for(int j=0; j<Columns_Num-1;j++){
             // 與下一列判斷是否有 Edge，直到 Row Number -1 行
             if((Input_Matrix[j+i*Columns_Num]=='0'||Input_Matrix[j+i*Columns_Num]=='R')&&
                (Input_Matrix[j+(i+1)*Columns_Num]=='0'|| Input_Matrix[j+(i+1)*Columns_Num]=='R')){
-                Adjacency_Matrix[j+i*Columns_Num][j+(i+1)*Columns_Num]=1;
-                Adjacency_Matrix[j+(i+1)*Columns_Num][j+i*Columns_Num]=1;
+                addEdge(j+i*Columns_Num,j+(i+1)*Columns_Num);
+                addEdge(j+(i+1)*Columns_Num,j+i*Columns_Num);
             }
             // 每一個元素與右側判斷是否有 Edge，直到 Column Number - 1 行
             if((Input_Matrix[j+i*Columns_Num]=='0'||Input_Matrix[j+i*Columns_Num]=='R')&&
                (Input_Matrix[j+1+i*Columns_Num]=='0'|| Input_Matrix[j+1+i*Columns_Num]=='R')){
-                Adjacency_Matrix[j+i*Columns_Num][j+1+i*Columns_Num]=1;
-                Adjacency_Matrix[j+1+i*Columns_Num][j+i*Columns_Num]=1;
+                addEdge(j+i*Columns_Num, j+1+i*Columns_Num);
+                addEdge(j+1+i*Columns_Num, j+i*Columns_Num);
             }
             if(Input_Matrix[j+i*Columns_Num]=='R') Charging_Location_Index=j+i*Columns_Num;
         }
@@ -70,25 +77,21 @@ void Matrix_To_Adjacency_Matrix::Matrix_Transfer(){
         if(Input_Matrix[k+(Rows_Num-1)*Columns_Num]=='R') Charging_Location_Index=k+(Rows_Num-1)*Columns_Num;
     }
 }
-// Not necessary : To check whether the adjacency_Matrix builded or not
-void Matrix_To_Adjacency_Matrix::Print_Adjacency_Matrix(){
-    for(int i=0;i<Rows_Num*Columns_Num;i++){
-        for(int j=0;j<Rows_Num*Columns_Num;j++){
-            cout << Adjacency_Matrix[i][j];
-        }
-        cout <<endl;
-    }
-}
+
 class Cleaning_Robot{
 private:
     int *Color,*Distance,*Predecessor;   // Index 表示各個 Vertex，Color 表是否經過（ 1 為經過、0 為尚未經過 ）
-    StackArray S; // Sort the index by order in Stack，越上層距離越遠。
-    QueueArraySequential Print_Step_Array;
+    StackArray S; // Sort the index by order in Stack，將距離越遠的 Vertex 儲存在上層。
+    LinkedList Print_Step_Array; // 將步數用 LinkedList 儲存，最後輸出。
 public:
     Cleaning_Robot(){};
     
-    ~Cleaning_Robot(){};
-    Matrix_To_Adjacency_Matrix Steven;
+    ~Cleaning_Robot(){
+        delete [] Color;
+        delete [] Distance;
+        delete [] Predecessor;
+    };
+    Matrix_To_Adjacency_List Steven;
     void BFS();
     void Clean();
     void Print();
@@ -108,27 +111,25 @@ void Cleaning_Robot::BFS(){
     QueueArraySequential Q;
     int Visiting = Steven.Charging_Location_Index;
     // 只找與起點有連接的 Vertex
-    if ( Color[Visiting] == 0){
         Color[Visiting] = 1;
         Distance[Visiting] = 0;
         Predecessor[Visiting] = -1;
         Q.Push(Visiting);
         S.Push(Visiting);
-        
-        while(!Q.Empty()){
-            Visiting = Q.Front();
-            Q.Pop();
-            for (int i =0; i<Total_Elements;i++){
-                if(Steven.Adjacency_Matrix[Visiting][i]==1 && Color[i]==0){
-                    Q.Push(i);
-                    S.Push(i);
-                    Color[i] = 1;
-                    Distance[i]=Distance[Visiting]+1;
-                    Predecessor[i]=Visiting;
-                }
+                
+    while(!Q.Empty()){
+        Visiting = Q.Front();
+        Q.Pop();
+        for (int i =0; i<Total_Elements;i++){
+            if(Steven.AdjLists[Visiting].Find(i)==true  && Color[i]==0){
+                Q.Push(i);
+                S.Push(i);
+                Color[i] = 1;
+                Distance[i]=Distance[Visiting]+1;
+                Predecessor[i]=Visiting;
             }
-            Color[Visiting]=1;
         }
+        Color[Visiting]=1;
     }
     // 將顏色全改為未經過。
     for (int i=0;i<Total_Elements;i++){
@@ -136,15 +137,12 @@ void Cleaning_Robot::BFS(){
     }
 }
 void Cleaning_Robot::Clean(){
-    
     // 從距離最遠的開始且未造訪過的作為出發點。
     while(!S.Empty()){
-        
         // 當最遠處被造訪過，及 pop 掉，繼續 while 迴圈
         if(Color[S.Top()]!=0){
             S.Pop();
         }
-        
         // 依最短路徑走到 S.Top()
         else{
             int Visiting = S.Top();
@@ -163,25 +161,30 @@ void Cleaning_Robot::Clean(){
             Battery_Left ++; // 從原點起算經過 n 格，走了 n - 1 步
             
             while(!temp.Empty()){
-                Print_Step_Array.Push(temp.Top());
+                Print_Step_Array.Push_back(temp.Top());
                 temp.Pop();
             }
+            
+            // 走到 S.top 元素後，開始往回走到原點
             Going_Back(Visiting_Back,Battery_Left);
             S.Pop();
         }
     }
-    Print_Step_Array.Push(Steven.Charging_Location_Index);
+    
+    // 最後一步要回到原點
+    Print_Step_Array.Push_back(Steven.Charging_Location_Index);
     Print();
 }
 void Cleaning_Robot::Print(){
     // 把初始點在充電位置的移動數目 -1。
-    cout << Print_Step_Array.Size()-1 << endl;
-    // 將原先 Index 轉為行、列的表達法。
-    for (int i=0;i<Print_Step_Array.Size();i++){
-        cout <<Print_Step_Array.Front()/Steven.Columns_Num <<" " <<Print_Step_Array.Front()%Steven.Columns_Num <<endl;
-        Print_Step_Array.Pop();
+    OutputFile << Print_Step_Array.size<<endl;
+    ListNode *current = Print_Step_Array.first;             // 用pointer *current在list中移動
+    while (current != 0) {                 // Traversal
+        OutputFile << current->data/Steven.Columns_Num<<" "<< current->data%Steven.Columns_Num << endl;
+        current = current->next;
     }
 }
+
 // 回程時，以未造訪過的節點優先。
 void Cleaning_Robot::Going_Back(int Visiting_Location,int Battery_Left){
     
@@ -189,36 +192,36 @@ void Cleaning_Robot::Going_Back(int Visiting_Location,int Battery_Left){
         
         // 向右方確認是否距離更大，且電池壽命足夠。
         if( Color[Visiting_Location+1]==0 &&
-            Steven.Adjacency_Matrix[Visiting_Location][Visiting_Location+1]==1 &&
+            Steven.AdjLists[Visiting_Location].Find(Visiting_Location+1)==true &&
             Battery_Left-1 >= Distance[Visiting_Location+1]&&
            Distance[Visiting_Location+1] > Distance[Visiting_Location]
            ){
             Visiting_Location = Visiting_Location +1;
-            Print_Step_Array.Push(Visiting_Location);
+            Print_Step_Array.Push_back(Visiting_Location);
             Color[Visiting_Location]=1;
             Battery_Left --;
         }
         
         // 向下方確認是否距離更大，且電池壽命足夠。
         else if( Color[Visiting_Location+Steven.Columns_Num]==0 &&
-           Steven.Adjacency_Matrix[Visiting_Location][Visiting_Location+Steven.Columns_Num]==1 &&
+           Steven.AdjLists[Visiting_Location].Find(Visiting_Location+Steven.Columns_Num)==true &&
            Battery_Left-1 >= Distance[Visiting_Location+Steven.Columns_Num]&&
                 Distance[Visiting_Location+Steven.Columns_Num] > Distance[Visiting_Location]){
             Visiting_Location = Visiting_Location+Steven.Columns_Num;
-            Print_Step_Array.Push(Visiting_Location);
+            Print_Step_Array.Push_back(Visiting_Location);
             Color[Visiting_Location]=1;
             Battery_Left --;
         }
         
         // 向左方確認是否距離更大，且電池壽命足夠。
         else if( Color[Visiting_Location-1]==0 &&
-           Steven.Adjacency_Matrix[Visiting_Location][Visiting_Location-1]==1 &&
+            Steven.AdjLists[Visiting_Location].Find(Visiting_Location-1)==true  &&
            Battery_Left-1 >= Distance[Visiting_Location-1]&&
            Distance[Visiting_Location-1] > Distance[Visiting_Location]
                 ){
             
             Visiting_Location = Visiting_Location -1;
-            Print_Step_Array.Push(Visiting_Location);
+            Print_Step_Array.Push_back(Visiting_Location);
             Color[Visiting_Location]=1;
 
             Battery_Left --;
@@ -226,52 +229,52 @@ void Cleaning_Robot::Going_Back(int Visiting_Location,int Battery_Left){
         
         // 向上方確認是否距離更大，且電池壽命足夠。
         else if( Color[Visiting_Location-Steven.Columns_Num]==0 &&
-                Steven.Adjacency_Matrix[Visiting_Location][Visiting_Location-Steven.Columns_Num]==1 &&
+                Steven.AdjLists[Visiting_Location].Find(Visiting_Location-Steven.Columns_Num)==true &&
                 Battery_Left-1 >= Distance[Visiting_Location-Steven.Columns_Num]&&
                    Distance[Visiting_Location-Steven.Columns_Num] > Distance[Visiting_Location]){
             
             Visiting_Location = Visiting_Location-Steven.Columns_Num;
-            Print_Step_Array.Push(Visiting_Location);
+            Print_Step_Array.Push_back(Visiting_Location);
             Color[Visiting_Location]=1;
 
             Battery_Left --;
         }
         // 向右方確認是否距離更小，且電池壽命足夠。
         else if( Color[Visiting_Location+1]==0 &&
-           Steven.Adjacency_Matrix[Visiting_Location][Visiting_Location+1]==1 &&
+           Steven.AdjLists[Visiting_Location].Find(Visiting_Location+1)==true &&
            Battery_Left-1 >= Distance[Visiting_Location+1]){
             Visiting_Location = Visiting_Location +1;
-            Print_Step_Array.Push(Visiting_Location);
+            Print_Step_Array.Push_back(Visiting_Location);
             Color[Visiting_Location]=1;
             Battery_Left --;
         }
         // 向下方確認是否距離更小，且電池壽命足夠。
         else if( Color[Visiting_Location+Steven.Columns_Num]==0 &&
-                Steven.Adjacency_Matrix[Visiting_Location][Visiting_Location+Steven.Columns_Num]==1 &&
+                Steven.AdjLists[Visiting_Location].Find(Visiting_Location+Steven.Columns_Num)==true &&
                 Battery_Left-1 >= Distance[Visiting_Location+Steven.Columns_Num]){
             Visiting_Location = Visiting_Location+Steven.Columns_Num;
-            Print_Step_Array.Push(Visiting_Location);
+            Print_Step_Array.Push_back(Visiting_Location);
             Color[Visiting_Location]=1;
             Battery_Left --;
         }
         // 向左方確認是否距離更小，且電池壽命足夠。
         else if( Color[Visiting_Location-1]==0 &&
-                Steven.Adjacency_Matrix[Visiting_Location][Visiting_Location-1]==1 &&
+                Steven.AdjLists[Visiting_Location].Find(Visiting_Location-1)==true &&
                 Battery_Left-1 >= Distance[Visiting_Location-1]){
             
             Visiting_Location = Visiting_Location -1;
-            Print_Step_Array.Push(Visiting_Location);
+            Print_Step_Array.Push_back(Visiting_Location);
             Color[Visiting_Location]=1;
             
             Battery_Left --;
         }
         // 向上方確認是否距離更小，且電池壽命足夠。
         else if( Color[Visiting_Location-Steven.Columns_Num]==0 &&
-                Steven.Adjacency_Matrix[Visiting_Location][Visiting_Location-Steven.Columns_Num]==1 &&
+                Steven.AdjLists[Visiting_Location].Find(Visiting_Location-Steven.Columns_Num)==true &&
                 Battery_Left-1 >= Distance[Visiting_Location-Steven.Columns_Num]){
             
             Visiting_Location = Visiting_Location-Steven.Columns_Num;
-            Print_Step_Array.Push(Visiting_Location);
+            Print_Step_Array.Push_back(Visiting_Location);
             Color[Visiting_Location]=1;
             
             Battery_Left --;
@@ -281,7 +284,7 @@ void Cleaning_Robot::Going_Back(int Visiting_Location,int Battery_Left){
             Visiting_Location = Predecessor[Visiting_Location];
             
             if (Visiting_Location==Steven.Charging_Location_Index) break;
-            Print_Step_Array.Push(Visiting_Location);
+            Print_Step_Array.Push_back(Visiting_Location);
             Color[Visiting_Location]=1;
             Battery_Left --;
         }
@@ -290,22 +293,35 @@ void Cleaning_Robot::Going_Back(int Visiting_Location,int Battery_Left){
     
 }
 int main() {
+    
+    
+    InputFile.open("floor.data");
+    OutputFile.open("final.path");
+    
+    
+    
     int Rows, Columns,Battery_Life;
     string Elements_By_Rows;
-    cin >> Rows >> Columns >> Battery_Life ;
+    InputFile >> Rows >> Columns >> Battery_Life ;
     char *Map_Matrix = new char [Rows*Columns];
     // Input the Map Matrix
     for(int i=0; i<Rows; i++){
-        cin >> Elements_By_Rows ;
+        InputFile >> Elements_By_Rows ;
         for(int j=0; j<Columns; j++){
             Map_Matrix[j+i*Columns] = Elements_By_Rows[j];
         }
     }
     // Convert it to the Adjacency Matrix
     Cleaning_Robot A;
-    Matrix_To_Adjacency_Matrix Temp_Matrix (Rows,Columns,Map_Matrix,Battery_Life);
+    Matrix_To_Adjacency_List Temp_Matrix (Rows,Columns,Map_Matrix,Battery_Life);
     A.Steven =Temp_Matrix;
+    
     A.BFS();
+    
     A.Clean();
+    
+    InputFile.close();
+    OutputFile.close();
+    
     return 0;
 }
